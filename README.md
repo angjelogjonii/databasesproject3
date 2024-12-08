@@ -1,4 +1,4 @@
-Login & User Session Handling: Registered users can securely log in with hashed passwords. User sessions ensure only authorized users can access specific features.
+Login/User Session Handling: Registered users can securely log in with hashed passwords. User sessions ensure only authorized users can access specific features.
 Find Single Item: Retrieve locations of all pieces of an item by entering its itemID.
 Find Order Items: Fetch details and locations of all items in an order by entering its orderID.
 Accept Donations: Staff members can record donations, validate donor IDs, and save item details with locations.
