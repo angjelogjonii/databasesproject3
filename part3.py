@@ -34,7 +34,7 @@ def login():
 
 @app.route('/find_item', methods=['GET'])
 def find_item():
-    # Task 2: Find Single Item
+    # Task 2: Find Single Item (Updated for Task 12)
     # Ensure the user is logged in
     if 'username' not in session:
         return jsonify({'message': 'Unauthorized'}), 401
@@ -42,10 +42,10 @@ def find_item():
     # Get the itemID from the query parameters
     item_id = request.args.get('itemID')
     
-    # Query the database for the item's pieces and their locations
+    # Query the database for the item's pieces and their locations, including copies
     cur = mysql.connection.cursor()
     cur.execute("""
-        SELECT p.itemID, p.description, p.room_number, p.shelf_number 
+        SELECT p.itemID, p.copyNum, p.description, p.room_number, p.shelf_number 
         FROM pieces p
         WHERE p.itemID = %s""", (item_id,))
     
@@ -55,7 +55,7 @@ def find_item():
 
 @app.route('/find_order_items', methods=['GET'])
 def find_order_items():
-    # Task 3: Find Order Items
+    # Task 3: Find Order Items (Updated for Task 12)
     # Ensure the user is logged in
     if 'username' not in session:
         return jsonify({'message': 'Unauthorized'}), 401
@@ -63,13 +63,13 @@ def find_order_items():
     # Get the orderID from the query parameters
     order_id = request.args.get('orderID')
     
-    # Query the database to fetch items and their locations for the given order
+    # Query the database to fetch items and their locations for the given order, including copies
     cur = mysql.connection.cursor()
     cur.execute("""
-        SELECT i.itemID, i.category, i.subcategory, p.room_number, p.shelf_number
+        SELECT i.itemID, i.copyNum, i.category, i.subcategory, p.room_number, p.shelf_number
         FROM items i
-        JOIN pieces p ON i.itemID = p.itemID
-        JOIN orders_items oi ON i.itemID = oi.itemID
+        JOIN pieces p ON i.itemID = p.itemID AND i.copyNum = p.copyNum
+        JOIN orders_items oi ON i.itemID = oi.itemID AND i.copyNum = oi.copyNum
         WHERE oi.orderID = %s""", (order_id,))
     
     # Fetch all matching records
@@ -144,7 +144,7 @@ def start_order():
 
 @app.route('/add_to_order', methods=['POST'])
 def add_to_order():
-    # Task 6: Add to Current Order
+    # Task 6: Add to Current Order (Updated for Task 12)
     if 'username' not in session:
         return jsonify({'message': 'Unauthorized'}), 401
 
@@ -153,18 +153,19 @@ def add_to_order():
         return jsonify({'message': 'No active order'}), 400
 
     item_id = request.json['item_id']
+    copy_num = request.json['copy_num']
     cur = mysql.connection.cursor()
-    cur.execute("SELECT * FROM items WHERE itemID = %s AND orderID IS NULL", (item_id,))
+    cur.execute("SELECT * FROM items WHERE itemID = %s AND copyNum = %s AND orderID IS NULL", (item_id, copy_num))
     if not cur.fetchone():
-        return jsonify({'message': 'Item not available for order'}), 400
+        return jsonify({'message': 'Item copy not available for order'}), 400
 
-    cur.execute("UPDATE items SET orderID = %s WHERE itemID = %s", (order_id, item_id))
+    cur.execute("UPDATE items SET orderID = %s WHERE itemID = %s AND copyNum = %s", (order_id, item_id, copy_num))
     mysql.connection.commit()
-    return jsonify({'message': 'Item added to order'}), 200
+    return jsonify({'message': 'Item copy added to order'}), 200
 
 @app.route('/prepare_order', methods=['POST'])
 def prepare_order():
-    # Task 7: Prepare Order
+    # Task 7: Prepare Order (Updated for Task 12)
     if 'username' not in session:
         return jsonify({'message': 'Unauthorized'}), 401
 
@@ -235,6 +236,25 @@ def year_end_report():
         GROUP BY category""")
     results = cur.fetchall()
     return jsonify(results), 200
+
+@app.route('/handle_duplicate_items', methods=['POST'])
+def handle_duplicate_items():
+    # Task 12: Handle Duplicate Items
+    if 'username' not in session:
+        return jsonify({'message': 'Unauthorized'}), 401
+
+    item_id = request.json['item_id']
+    num_copies = request.json['num_copies']
+
+    cur = mysql.connection.cursor()
+    for copy_num in range(1, num_copies + 1):
+        cur.execute("""
+            INSERT INTO items (itemID, copyNum, description, category, subcategory, new_or_used, donorID) 
+            SELECT itemID, %s, description, category, subcategory, new_or_used, donorID FROM items 
+            WHERE itemID = %s AND copyNum = 1""", (copy_num, item_id))
+    
+    mysql.connection.commit()
+    return jsonify({'message': f'{num_copies} copies created for item {item_id}'}), 200
 
 if __name__ == '__main__':
     app.run(debug=True)
